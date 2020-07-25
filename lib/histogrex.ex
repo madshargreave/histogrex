@@ -313,13 +313,13 @@ defmodule Histogrex do
       def get_adapter(), do: elem(@adapter, 0)
 
       defp register_tables() do
-        # case @adapter do
-        #   {module, opts} ->
-        #     module.new(__MODULE__, opts)
+        case @adapter do
+          {:ets, opts} ->
+            :ets.new(__MODULE__, opts)
 
-        #   {module, func, opts} ->
-        #     apply(module, func, opts)
-        # end
+          {module, func, opts} ->
+            apply(module, func, opts)
+        end
 
         for h <- @histogrex_registry do
           Histogrex.reset(h)

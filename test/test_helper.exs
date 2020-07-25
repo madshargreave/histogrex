@@ -1,5 +1,5 @@
 defmodule FakeRegistry do
-  use Histogrex, adapter: {:ets, [:set, :public, :named_table, write_concurrency: true]}
+  use Histogrex
 
   histogrex(:user_load, min: 1, max: 10_000_000, precision: 3)
   histogrex(:high_sig, min: 459_876, max: 12_718_782, precision: 5)
