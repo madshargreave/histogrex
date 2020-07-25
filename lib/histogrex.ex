@@ -314,6 +314,9 @@ defmodule Histogrex do
 
       defp register_tables() do
         case @adapter do
+          :skip ->
+            :ok
+
           {:ets, opts} ->
             :ets.new(__MODULE__, opts)
 
