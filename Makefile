@@ -7,3 +7,4 @@ t:
 # runs dialyzer
 d:
 	mix dialyzer
+	
