@@ -4,20 +4,28 @@ defmodule Histogrex.Tests do
 
   # yes, sharing global state, but makes tests much faster. :deal_with_it:
   setup_all do
-     for i <- (0..999_999) do
-       FakeRegistry.record!(:user_load, i)
-     end
-     :ok
+    for i <- 0..999_999 do
+      FakeRegistry.record!(:user_load, i)
+      # FakeDETSRegistry.record!(:user_load, i)
+    end
+
+    :ok
   end
 
   setup ctx do
     case ctx[:clear] do
-      nil -> nil
+      nil ->
+        nil
+
       :http_ms ->
         FakeRegistry.reset(:http_ms, "users")
         FakeRegistry.reset(:http_ms, :about)
-      key -> FakeRegistry.reset(key)
+
+      key ->
+        FakeRegistry.reset(key)
+        # FakeETSRegistry.reset(key)
     end
+
     :ok
   end
 
@@ -53,7 +61,15 @@ defmodule Histogrex.Tests do
   end
 
   test "value at quantile" do
-    for {q, v} <- [{50, 500223}, {75, 750079}, {90, 900095}, {95, 950271}, {99, 990207}, {99.9, 999423}, {99.99, 999935}] do
+    for {q, v} <- [
+          {50, 500_223},
+          {75, 750_079},
+          {90, 900_095},
+          {95, 950_271},
+          {99, 990_207},
+          {99.9, 999_423},
+          {99.99, 999_935}
+        ] do
       assert FakeRegistry.value_at_quantile(:user_load, q) == v
     end
   end
@@ -63,7 +79,7 @@ defmodule Histogrex.Tests do
   end
 
   test "max" do
-    assert FakeRegistry.max(:user_load) == 1000447
+    assert FakeRegistry.max(:user_load) == 1_000_447
   end
 
   test "min" do
@@ -71,16 +87,16 @@ defmodule Histogrex.Tests do
   end
 
   test "mean" do
-    assert FakeRegistry.mean(:user_load) == 500000.013312
+    assert FakeRegistry.mean(:user_load) == 500_000.013312
   end
 
   test "lookups via iterator" do
     it = FakeRegistry.iterator(:user_load)
     assert FakeRegistry.min(it) == 0
-    assert FakeRegistry.max(it) == 1000447
-    assert FakeRegistry.mean(it) == 500000.013312
+    assert FakeRegistry.max(it) == 1_000_447
+    assert FakeRegistry.mean(it) == 500_000.013312
     assert FakeRegistry.total_count(it) == 1_000_000
-    assert FakeRegistry.value_at_quantile(it, 75) == 750079
+    assert FakeRegistry.value_at_quantile(it, 75) == 750_079
   end
 
   @tag clear: :http_ms
@@ -104,7 +120,7 @@ defmodule Histogrex.Tests do
     assert FakeRegistry.max(:http_ms, :about) == 103
 
     assert FakeRegistry.mean(:http_ms, "users") == 26.0
-    assert FakeRegistry.mean(:http_ms, :about) ==  101.66666666666667
+    assert FakeRegistry.mean(:http_ms, :about) == 101.66666666666667
   end
 
   @tag clear: :http_ms
@@ -119,7 +135,7 @@ defmodule Histogrex.Tests do
     assert FakeRegistry.value_at_quantile(it, 99.999) == 103
     assert FakeRegistry.min(it) == 100
     assert FakeRegistry.max(it) == 103
-    assert FakeRegistry.mean(it) ==  101.66666666666667
+    assert FakeRegistry.mean(it) == 101.66666666666667
   end
 
   @tag clear: :http_ms
@@ -149,19 +165,32 @@ defmodule Histogrex.Tests do
 
   @tag clear: :high_sig
   test "test high significant figure" do
-    for value <- [459876, 669187, 711612, 816326, 931423, 1033197, 1131895, 2477317, 3964974, 12718782] do
+    for value <- [
+          459_876,
+          669_187,
+          711_612,
+          816_326,
+          931_423,
+          1_033_197,
+          1_131_895,
+          2_477_317,
+          3_964_974,
+          12_718_782
+        ] do
       FakeRegistry.record!(:high_sig, value)
     end
-    assert FakeRegistry.value_at_quantile(:high_sig, 50) == 1048575
+
+    assert FakeRegistry.value_at_quantile(:high_sig, 50) == 1_048_575
   end
 
   @tag clear: :high_sig
   test "min not zero" do
-    for value <- [459876, 669187, 711612] do
+    for value <- [459_876, 669_187, 711_612] do
       FakeRegistry.record!(:high_sig, value)
     end
+
     # same as what the Go library gives at least
-    assert FakeRegistry.min(:high_sig) == 262144
+    assert FakeRegistry.min(:high_sig) == 262_144
   end
 
   @tag clear: :high_sig
@@ -172,13 +201,24 @@ defmodule Histogrex.Tests do
     FakeRegistry.record!(:http_ms, :flow, 44)
     FakeRegistry.record!(:http_ms, :flow, 99)
 
-    metrics = FakeRegistry.reduce(%{}, fn {name, it}, acc ->
-      Map.put(acc, name, FakeRegistry.total_count(it))
-    end)
+    metrics =
+      FakeRegistry.reduce(%{}, fn {name, it}, acc ->
+        Map.put(acc, name, FakeRegistry.total_count(it))
+      end)
 
     assert metrics["spice"] == 1
     assert metrics[:flow] == 2
     assert metrics[:high_sig] == 0
     assert metrics[:user_load] == 1_000_000
   end
+
+  # @tag clear: :dets
+  # test "dets" do
+  #   it = FakeDETSRegistry.iterator(:user_load)
+  #   assert FakeDETSRegistry.min(it) == 0
+  #   assert FakeDETSRegistry.max(it) == 1_000_447
+  #   assert FakeDETSRegistry.mean(it) == 500_000.013312
+  #   assert FakeDETSRegistry.total_count(it) == 1_000_000
+  #   assert FakeDETSRegistry.value_at_quantile(it, 75) == 750_079
+  # end
 end

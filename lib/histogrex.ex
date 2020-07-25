@@ -43,33 +43,55 @@ defmodule Histogrex do
   @total_count_index 2
 
   defstruct [
-    :name, :registrar, :bucket_count, :counts_length, :unit_magnitude,
-    :sub_bucket_mask, :sub_bucket_count, :sub_bucket_half_count,
-    :sub_bucket_half_count_magnitude, :template
+    :name,
+    :registrar,
+    :bucket_count,
+    :counts_length,
+    :unit_magnitude,
+    :sub_bucket_mask,
+    :sub_bucket_count,
+    :sub_bucket_half_count,
+    :sub_bucket_half_count_magnitude,
+    :template
   ]
 
   @type t :: %Histogrex{
-    name: atom | binary, registrar: module,
-    bucket_count: pos_integer, counts_length: pos_integer,
-    unit_magnitude: non_neg_integer, sub_bucket_mask: non_neg_integer,
-    sub_bucket_count: non_neg_integer, sub_bucket_half_count: non_neg_integer,
-    sub_bucket_half_count_magnitude: non_neg_integer, template: nil | tuple,
-  }
+          name: atom | binary,
+          registrar: module,
+          bucket_count: pos_integer,
+          counts_length: pos_integer,
+          unit_magnitude: non_neg_integer,
+          sub_bucket_mask: non_neg_integer,
+          sub_bucket_count: non_neg_integer,
+          sub_bucket_half_count: non_neg_integer,
+          sub_bucket_half_count_magnitude: non_neg_integer,
+          template: nil | tuple
+        }
 
   defmodule Iterator do
     @moduledoc false
     defstruct [
-      :h, :total_count, :counts,
-      bucket_index: 0, sub_bucket_index: -1, count_at_index: 0,
-      count_to_index: 0, value_from_index: 0, highest_equivalent_value: 0,
+      :h,
+      :total_count,
+      :counts,
+      bucket_index: 0,
+      sub_bucket_index: -1,
+      count_at_index: 0,
+      count_to_index: 0,
+      value_from_index: 0,
+      highest_equivalent_value: 0
     ]
 
     @type t :: %Iterator{
-      h: struct, total_count: non_neg_integer,
-      bucket_index: non_neg_integer, sub_bucket_index: integer,
-      count_at_index: non_neg_integer, count_to_index: non_neg_integer,
-      value_from_index: non_neg_integer, highest_equivalent_value: non_neg_integer,
-    }
+            h: struct,
+            total_count: non_neg_integer,
+            bucket_index: non_neg_integer,
+            sub_bucket_index: integer,
+            count_at_index: non_neg_integer,
+            count_to_index: non_neg_integer,
+            value_from_index: non_neg_integer,
+            highest_equivalent_value: non_neg_integer
+          }
 
     @doc """
     Resets the iterator so that it can be reused. There shouldn't be a need to
@@ -77,9 +99,14 @@ defmodule Histogrex do
     """
     @spec reset(t) :: t
     def reset(it) do
-      %{it |
-        bucket_index: 0, sub_bucket_index: -1, count_at_index: 0,
-        count_to_index: 0, value_from_index: 0, highest_equivalent_value: 0
+      %{
+        it
+        | bucket_index: 0,
+          sub_bucket_index: -1,
+          count_at_index: 0,
+          count_to_index: 0,
+          value_from_index: 0,
+          highest_equivalent_value: 0
       }
     end
 
@@ -87,21 +114,31 @@ defmodule Histogrex do
     @spec empty() :: t
     def empty() do
       h = %Histogrex{
-        bucket_count: 0, counts_length: 1, sub_bucket_mask: 0, unit_magnitude: 0,
-        sub_bucket_half_count: 0, sub_bucket_half_count_magnitude: 0, sub_bucket_count: 0,
+        bucket_count: 0,
+        counts_length: 1,
+        sub_bucket_mask: 0,
+        unit_magnitude: 0,
+        sub_bucket_half_count: 0,
+        sub_bucket_half_count_magnitude: 0,
+        sub_bucket_count: 0
       }
+
       %Iterator{total_count: 0, counts: 0, sub_bucket_index: 0, h: h}
     end
   end
 
   @doc false
-  defmacro __using__(_opts) do
+  defmacro __using__(opts) do
+    adapter =
+      Keyword.get(opts, :adapter, {:ets, [:set, :public, :named_table, write_concurrency: true]})
+
     quote location: :keep do
       use GenServer
       import Histogrex, only: [histogrex: 2, template: 2]
       alias Histogrex.Iterator, as: It
 
       @before_compile Histogrex
+      @adapter unquote(adapter)
 
       Module.register_attribute(__MODULE__, :histogrex_names, accumulate: true)
       Module.register_attribute(__MODULE__, :histogrex_registry, accumulate: true)
@@ -161,13 +198,14 @@ defmodule Histogrex do
       def record(template, metric, value), do: record_n(template, metric, value, 1)
 
       @doc false
-      @spec record_n(atom, atom | binary, non_neg_integer, non_neg_integer) :: :ok | {:error, binary}
+      @spec record_n(atom, atom | binary, non_neg_integer, non_neg_integer) ::
+              :ok | {:error, binary}
       def record_n(template, metric, value, n) do
         Histogrex.record(get_histogrex(template), metric, value, n)
       end
 
       @doc false
-      @spec value_at_quantile(Iterator.t | atom, number) :: non_neg_integer
+      @spec value_at_quantile(Iterator.t() | atom, number) :: non_neg_integer
       def value_at_quantile(%It{} = it, q) do
         Histogrex.value_at_quantile(it, q)
       end
@@ -184,7 +222,7 @@ defmodule Histogrex do
       end
 
       @doc false
-      @spec total_count(Iterator.t | atom) :: non_neg_integer
+      @spec total_count(Iterator.t() | atom) :: non_neg_integer
       def total_count(%It{} = it), do: Histogrex.total_count(it)
 
       @doc false
@@ -192,7 +230,8 @@ defmodule Histogrex do
 
       @doc false
       @spec total_count(atom, atom | binary) :: non_neg_integer
-      def total_count(template, metric), do: Histogrex.total_count(get_histogrex(template), metric)
+      def total_count(template, metric),
+        do: Histogrex.total_count(get_histogrex(template), metric)
 
       @doc false
       @spec mean(atom) :: non_neg_integer
@@ -206,7 +245,7 @@ defmodule Histogrex do
       def mean(template, metric), do: Histogrex.mean(get_histogrex(template), metric)
 
       @doc false
-      @spec max(Iterator.t | atom) :: non_neg_integer
+      @spec max(Iterator.t() | atom) :: non_neg_integer
       def max(%It{} = it), do: Histogrex.max(it)
 
       @doc false
@@ -217,7 +256,7 @@ defmodule Histogrex do
       def max(template, metric), do: Histogrex.max(get_histogrex(template), metric)
 
       @doc false
-      @spec min(Iterator.t | atom) :: non_neg_integer
+      @spec min(Iterator.t() | atom) :: non_neg_integer
       def min(%It{} = it), do: Histogrex.min(it)
 
       @doc false
@@ -228,7 +267,7 @@ defmodule Histogrex do
       def min(template, metric), do: Histogrex.min(get_histogrex(template), metric)
 
       @doc false
-      @spec reset(Iterator.t | atom) :: :ok
+      @spec reset(Iterator.t() | atom) :: :ok
       def reset(%It{} = it), do: Histogrex.reset(it)
 
       @doc false
@@ -239,13 +278,13 @@ defmodule Histogrex do
       def reset(template, metric), do: Histogrex.reset(get_histogrex(template), metric)
 
       @doc false
-      @spec iterator(atom) :: Iterator.t
+      @spec iterator(atom) :: Iterator.t()
       def iterator(metric) do
         Histogrex.iterator(get_histogrex(metric))
       end
 
       @doc false
-      @spec iterator(atom, atom | binary) :: Iterator.t
+      @spec iterator(atom, atom | binary) :: Iterator.t()
       def iterator(template, metric) do
         Histogrex.iterator(get_histogrex(template), metric)
       end
@@ -259,7 +298,7 @@ defmodule Histogrex do
       def delete(template, metric), do: Histogrex.delete(get_histogrex(template), metric)
 
       @doc false
-      @spec reduce(any, ((Iterator.t, any) -> any)) :: any
+      @spec reduce(any, (Iterator.t(), any -> any)) :: any
       def reduce(acc, fun), do: Histogrex.reduce(__MODULE__, acc, fun)
     end
   end
@@ -270,8 +309,18 @@ defmodule Histogrex do
       @spec get_names() :: [atom]
       def get_names(), do: @histogrex_names
 
+      @spec get_adapter() :: atom
+      def get_adapter(), do: elem(@adapter, 0)
+
       defp register_tables() do
-        :ets.new(__MODULE__, [:set, :public, :named_table, write_concurrency: true])
+        # case @adapter do
+        #   {module, opts} ->
+        #     module.new(__MODULE__, opts)
+
+        #   {module, func, opts} ->
+        #     apply(module, func, opts)
+        # end
+
         for h <- @histogrex_registry do
           Histogrex.reset(h)
         end
@@ -301,7 +350,16 @@ defmodule Histogrex do
   """
   defmacro histogrex(name, opts) do
     quote location: :keep do
-      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, false))
+      @unquote(name)(
+        Histogrex.new(
+          unquote(name),
+          __MODULE__,
+          unquote(opts)[:min],
+          unquote(opts)[:max],
+          unquote(opts)[:precision] || 3,
+          false
+        )
+      )
       @histogrex_names unquote(name)
       @histogrex_registry @unquote(name)()
       def get_histogrex(unquote(name)), do: @unquote(name)()
@@ -310,7 +368,16 @@ defmodule Histogrex do
 
   defmacro template(name, opts) do
     quote location: :keep do
-      @unquote(name)(Histogrex.new(unquote(name), __MODULE__, unquote(opts)[:min], unquote(opts)[:max], unquote(opts)[:precision] || 3, true))
+      @unquote(name)(
+        Histogrex.new(
+          unquote(name),
+          __MODULE__,
+          unquote(opts)[:min],
+          unquote(opts)[:max],
+          unquote(opts)[:precision] || 3,
+          true
+        )
+      )
       def get_histogrex(unquote(name)), do: @unquote(name)()
     end
   end
@@ -321,19 +388,24 @@ defmodule Histogrex do
   be no need to call this direction. Use the `histogrex` macro instead.
   """
   @spec new(binary | atom, module, pos_integer, pos_integer, 1..5, boolean) :: t
-  def new(name, registrar, min, max, precision \\ 3, template \\ false) when min > 0 and max > min and precision in (1..5) do
+  def new(name, registrar, min, max, precision \\ 3, template \\ false)
+      when min > 0 and max > min and precision in 1..5 do
     largest_value_with_single_unit_resolution = 2 * :math.pow(10, precision)
-    sub_bucket_count_magnitude = round(Float.ceil(:math.log2(largest_value_with_single_unit_resolution)))
 
-    sub_bucket_half_count_magnitude = case sub_bucket_count_magnitude < 1 do
-      true -> 1
-      false -> sub_bucket_count_magnitude - 1
-    end
+    sub_bucket_count_magnitude =
+      round(Float.ceil(:math.log2(largest_value_with_single_unit_resolution)))
 
-    unit_magnitude = case round(Float.floor(:math.log2(min))) do
-      n when n < 0 -> 0
-      n -> n
-    end
+    sub_bucket_half_count_magnitude =
+      case sub_bucket_count_magnitude < 1 do
+        true -> 1
+        false -> sub_bucket_count_magnitude - 1
+      end
+
+    unit_magnitude =
+      case round(Float.floor(:math.log2(min))) do
+        n when n < 0 -> 0
+        n -> n
+      end
 
     sub_bucket_count = round(:math.pow(2, sub_bucket_half_count_magnitude + 1))
     sub_bucket_half_count = round(sub_bucket_count / 2)
@@ -342,10 +414,11 @@ defmodule Histogrex do
     bucket_count = calculate_bucket_count(bsl(sub_bucket_count, unit_magnitude), max, 1)
     counts_length = round((bucket_count + 1) * (sub_bucket_count / 2))
 
-    template = case template do
-      false -> nil
-      true -> create_row(name, name, counts_length)
-    end
+    template =
+      case template do
+        false -> nil
+        true -> create_row(name, name, counts_length)
+      end
 
     %__MODULE__{
       name: name,
@@ -357,7 +430,7 @@ defmodule Histogrex do
       sub_bucket_mask: sub_bucket_mask,
       sub_bucket_count: sub_bucket_count,
       sub_bucket_half_count: sub_bucket_half_count,
-      sub_bucket_half_count_magnitude: sub_bucket_half_count_magnitude,
+      sub_bucket_half_count_magnitude: sub_bucket_half_count_magnitude
     }
   end
 
@@ -365,7 +438,7 @@ defmodule Histogrex do
   Same as `record/3` but raises on error
   """
   @spec record!(t, pos_integer, pos_integer) :: :ok | no_return
-    def record!(h, value, n) do
+  def record!(h, value, n) do
     case record(h, value, n) do
       :ok -> :ok
       {:error, message} -> raise message
@@ -383,10 +456,13 @@ defmodule Histogrex do
 
   def record(h, value, n) do
     index = get_value_index(h, value)
+
     case index < 0 or h.counts_length <= index do
-      true -> {:error, "value it outside of range"}
+      true ->
+        {:error, "value it outside of range"}
+
       false ->
-        :ets.update_counter(h.registrar, h.name, [{3, n}, {index+4, n}])
+        h.registrar.get_adapter().update_counter(h.registrar, h.name, [{3, n}, {index + 4, n}])
         :ok
     end
   end
@@ -414,10 +490,19 @@ defmodule Histogrex do
 
   def record(h, metric, value, n) do
     index = get_value_index(h, value)
+
     case index < 0 or h.counts_length <= index do
-      true -> {:error, "value it outside of range"}
+      true ->
+        {:error, "value it outside of range"}
+
       false ->
-        :ets.update_counter(h.registrar, metric, [{3, n}, {index+4, n}], h.template)
+        h.registrar.get_adapter().update_counter(
+          h.registrar,
+          metric,
+          [{3, n}, {index + 4, n}],
+          h.template
+        )
+
         :ok
     end
   end
@@ -426,7 +511,7 @@ defmodule Histogrex do
   Gets the value at the requested quantile. The quantile must be greater than 0
   and less than or equal to 100. It can be a float.
   """
-  @spec value_at_quantile(t | Iterator.t, float) :: float
+  @spec value_at_quantile(t | Iterator.t(), float) :: float
   def value_at_quantile(%Histogrex{} = h, q) when q > 0 and q <= 100 do
     do_value_at_quantile(iterator(h), q)
   end
@@ -450,10 +535,11 @@ defmodule Histogrex do
   end
 
   defp do_value_at_quantile(it, q) do
-    count_at_percetile = round(Float.floor((q / 100 * it.total_count) + 0.5))
+    count_at_percetile = round(Float.floor(q / 100 * it.total_count + 0.5))
 
     Enum.reduce_while(it, 0, fn it, total ->
       total = total + it.count_at_index
+
       case total >= count_at_percetile do
         true -> {:halt, highest_equivalent_value(it.h, it.value_from_index)}
         false -> {:cont, total}
@@ -464,7 +550,7 @@ defmodule Histogrex do
   @doc """
   Returns the mean value
   """
-  @spec mean(t | Iterator.t) :: float
+  @spec mean(t | Iterator.t()) :: float
   def mean(%Histogrex{} = h), do: do_mean(iterator(h))
 
   @doc """
@@ -485,14 +571,18 @@ defmodule Histogrex do
 
   defp do_mean(it) do
     case it.total_count == 0 do
-      true -> 0
+      true ->
+        0
+
       false ->
-        total = Enum.reduce(it, 0, fn it, total ->
-          case it.count_at_index do
-            0 -> total
-            n -> total + n * median_equivalent_value(it.h, it.value_from_index)
-          end
-        end)
+        total =
+          Enum.reduce(it, 0, fn it, total ->
+            case it.count_at_index do
+              0 -> total
+              n -> total + n * median_equivalent_value(it.h, it.value_from_index)
+            end
+          end)
+
         total / it.total_count
     end
   end
@@ -501,9 +591,9 @@ defmodule Histogrex do
   Resets the histogram to 0 values. Note that the histogram is a fixed-size, so
   calling this won't free any memory. It is useful for testing.
   """
-  @spec reset(t | Iterator.t) :: :ok
+  @spec reset(t | Iterator.t()) :: :ok
   def reset(%Histogrex{} = h) do
-    :ets.insert(h.registrar, create_row(h.name, nil, h.counts_length))
+    h.registrar.get_adapter().insert(h.registrar, create_row(h.name, nil, h.counts_length))
     :ok
   end
 
@@ -516,7 +606,7 @@ defmodule Histogrex do
     # cannot use it.h.name as this could be a dynamic metric and we don't want
     # the template name
     name = elem(it.counts, 0)
-    :ets.insert(h.registrar, create_row(name, nil, h.counts_length))
+    h.registrar.get_adapter().insert(h.registrar, create_row(name, nil, h.counts_length))
     :ok
   end
 
@@ -526,7 +616,7 @@ defmodule Histogrex do
   """
   @spec reset(t, atom | binary) :: :ok
   def reset(%Histogrex{} = h, metric) do
-    :ets.insert(h.registrar, create_row(metric, h.name, h.counts_length))
+    h.registrar.get_adapter().insert(h.registrar, create_row(metric, h.name, h.counts_length))
     :ok
   end
 
@@ -542,19 +632,19 @@ defmodule Histogrex do
   """
   @spec delete(t, atom | binary) :: :ok
   def delete(%Histogrex{} = h, metric) do
-    :ets.delete(h.registrar, metric)
+    h.registrar.get_adapter().delete(h.registrar, metric)
     :ok
   end
 
   defp create_row(name, template, count) do
     # +1 for the total_count that we'll store at the start
-    List.to_tuple([name |  [template | List.duplicate(0, count + 1)]])
+    List.to_tuple([name | [template | List.duplicate(0, count + 1)]])
   end
 
   @doc """
   Get the total number of recorded values. This is O(1)
   """
-  @spec total_count(t | Iterator.t) :: non_neg_integer
+  @spec total_count(t | Iterator.t()) :: non_neg_integer
   def total_count(%Histogrex{} = h) do
     elem(get_counts(h), @total_count_index)
   end
@@ -586,7 +676,7 @@ defmodule Histogrex do
   @doc """
   Gets the approximate maximum value recorded
   """
-  @spec max(t | Iterator.t) :: non_neg_integer
+  @spec max(t | Iterator.t()) :: non_neg_integer
   def max(%Histogrex{} = h), do: do_max(iterator(h))
 
   @doc """
@@ -606,19 +696,21 @@ defmodule Histogrex do
   def max({:error, _}, _metric), do: 0
 
   defp do_max(it) do
-    max = Enum.reduce(it, 0, fn it, max ->
-      case it.count_at_index == 0 do
-        true -> max
-        false -> it.highest_equivalent_value
-      end
-    end)
+    max =
+      Enum.reduce(it, 0, fn it, max ->
+        case it.count_at_index == 0 do
+          true -> max
+          false -> it.highest_equivalent_value
+        end
+      end)
+
     highest_equivalent_value(it.h, max)
   end
 
   @doc """
   Gets the approximate minimum value recorded
   """
-  @spec min(t | Iterator.t) :: non_neg_integer
+  @spec min(t | Iterator.t()) :: non_neg_integer
   def min(%Histogrex{} = h), do: do_min(iterator(h))
 
   @doc """
@@ -638,17 +730,19 @@ defmodule Histogrex do
   def min({:error, _}, _metric), do: 0
 
   defp do_min(it) do
-    min = Enum.reduce_while(it, 0, fn it, min ->
-      case it.count_at_index != 0 && min == 0 do
-        true -> {:halt, it.highest_equivalent_value}
-        false -> {:cont, min}
-      end
-    end)
+    min =
+      Enum.reduce_while(it, 0, fn it, min ->
+        case it.count_at_index != 0 && min == 0 do
+          true -> {:halt, it.highest_equivalent_value}
+          false -> {:cont, min}
+        end
+      end)
+
     lowest_equivalent_value(it.h, min)
   end
 
   @doc false
-  @spec iterator(t | {:error, any}) :: Iterator.t
+  @spec iterator(t | {:error, any}) :: Iterator.t()
   def iterator({:error, _}), do: Iterator.empty()
 
   def iterator(h) do
@@ -657,12 +751,12 @@ defmodule Histogrex do
   end
 
   @doc false
-  @spec iterator(t | {:error, any}, atom | binary) :: Iterator.t
+  @spec iterator(t | {:error, any}, atom | binary) :: Iterator.t()
   def iterator({:error, _}, _metric), do: Iterator.empty()
 
   def iterator(h, metric) do
     case get_counts(h, metric) do
-      nil ->  Iterator.empty()
+      nil -> Iterator.empty()
       counts -> %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
     end
   end
@@ -670,24 +764,28 @@ defmodule Histogrex do
   @doc """
   Reduce all of a registry's histograms
   """
-  @spec reduce(module, any, ((Iterator.t, any)-> any)) :: any
+  @spec reduce(module, any, (Iterator.t(), any -> any)) :: any
   def reduce(module, acc, fun) do
     f = fn counts, acc ->
       name = elem(counts, 0)
-      h = case elem(counts, 1) do
-        nil -> module.get_histogrex(name)
-        template -> module.get_histogrex(template)
-      end
+
+      h =
+        case elem(counts, 1) do
+          nil -> module.get_histogrex(name)
+          template -> module.get_histogrex(template)
+        end
+
       it = %Iterator{h: h, counts: counts, total_count: elem(counts, @total_count_index)}
       fun.({name, it}, acc)
     end
+
     :ets.foldl(f, acc, module)
   end
 
   defp get_counts(h), do: get_counts(h, h.name)
 
   defp get_counts(h, metric) do
-    case :ets.lookup(h.registrar, metric) do
+    case h.registrar.get_adapter().lookup(h.registrar, metric) do
       [] -> nil
       [counts] -> counts
     end
@@ -733,19 +831,25 @@ defmodule Histogrex do
 
   defp next_non_equivalent_value(h, value) do
     {bucket_index, sub_bucket_index} = get_bucket_indexes(h, value)
-    lowest_equivalent_value(h, bucket_index, sub_bucket_index) + size_of_equivalent_value_range(h, bucket_index, sub_bucket_index)
+
+    lowest_equivalent_value(h, bucket_index, sub_bucket_index) +
+      size_of_equivalent_value_range(h, bucket_index, sub_bucket_index)
   end
 
   defp median_equivalent_value(h, value) do
     {bucket_index, sub_bucket_index} = get_bucket_indexes(h, value)
-    lowest_equivalent_value(h, bucket_index, sub_bucket_index) + bsr(size_of_equivalent_value_range(h, bucket_index, sub_bucket_index), 1)
+
+    lowest_equivalent_value(h, bucket_index, sub_bucket_index) +
+      bsr(size_of_equivalent_value_range(h, bucket_index, sub_bucket_index), 1)
   end
 
   defp size_of_equivalent_value_range(h, bucket_index, sub_bucket_index) do
-    adjusted_bucket_index = case sub_bucket_index >= h.sub_bucket_count do
-      true -> bucket_index + 1
-      false -> bucket_index
-    end
+    adjusted_bucket_index =
+      case sub_bucket_index >= h.sub_bucket_count do
+        true -> bucket_index + 1
+        false -> bucket_index
+      end
+
     bsl(1, h.unit_magnitude + adjusted_bucket_index)
   end
 
@@ -763,20 +867,23 @@ defmodule Histogrex do
   end
 
   defp bit_length(value, n) do
-    {value, n} = case value >= 128 do
-      true -> {bsr(value, 8), n + 8}
-      false -> {value, n}
-    end
+    {value, n} =
+      case value >= 128 do
+        true -> {bsr(value, 8), n + 8}
+        false -> {value, n}
+      end
 
-    {value, n} = case value >= 8 do
-      true -> {bsr(value, 4), n + 4}
-      false -> {value, n}
-    end
+    {value, n} =
+      case value >= 8 do
+        true -> {bsr(value, 4), n + 4}
+        false -> {value, n}
+      end
 
-    {value, n} = case value >= 2 do
-      true -> {bsr(value, 2), n + 2}
-      false -> {value, n}
-    end
+    {value, n} =
+      case value >= 2 do
+        true -> {bsr(value, 2), n + 2}
+        false -> {value, n}
+      end
 
     case value == 1 do
       true -> n + 1
@@ -787,6 +894,7 @@ end
 
 defimpl Enumerable, for: Histogrex.Iterator do
   use Bitwise
+
   @doc """
   Gets the total count of recorded samples. This is an 0(1) operation
   """
@@ -808,7 +916,7 @@ defimpl Enumerable, for: Histogrex.Iterator do
   def reduce(it, {:cont, acc}, f) do
     case it.count_to_index >= it.total_count do
       true -> {:done, acc}
-      false -> do_reduce(it, acc ,f)
+      false -> do_reduce(it, acc, f)
     end
   end
 
@@ -816,28 +924,36 @@ defimpl Enumerable, for: Histogrex.Iterator do
   defp do_reduce(it, acc, f) do
     h = it.h
     sub_bucket_index = it.sub_bucket_index + 1
-    {it, bucket_index, sub_bucket_index} = case sub_bucket_index >= h.sub_bucket_count do
-      true ->
-        bucket_index = it.bucket_index + 1
-        sub_bucket_index = h.sub_bucket_half_count
-        it = %{it | bucket_index: bucket_index, sub_bucket_index: sub_bucket_index}
-        {it, bucket_index, sub_bucket_index}
-      false ->
-        it = %{it | sub_bucket_index: sub_bucket_index}
-        {it, it.bucket_index, sub_bucket_index}
-    end
+
+    {it, bucket_index, sub_bucket_index} =
+      case sub_bucket_index >= h.sub_bucket_count do
+        true ->
+          bucket_index = it.bucket_index + 1
+          sub_bucket_index = h.sub_bucket_half_count
+          it = %{it | bucket_index: bucket_index, sub_bucket_index: sub_bucket_index}
+          {it, bucket_index, sub_bucket_index}
+
+        false ->
+          it = %{it | sub_bucket_index: sub_bucket_index}
+          {it, it.bucket_index, sub_bucket_index}
+      end
 
     case bucket_index >= h.bucket_count do
-      true -> {:done, acc}
+      true ->
+        {:done, acc}
+
       false ->
         count_at_index = count_at_index(it, bucket_index, sub_bucket_index)
         value_from_index = Histogrex.value_from_index(h, bucket_index, sub_bucket_index)
-        it = %{it |
-          count_at_index: count_at_index,
-          value_from_index: value_from_index,
-          count_to_index: it.count_to_index + count_at_index,
-          highest_equivalent_value: Histogrex.highest_equivalent_value(h, value_from_index),
+
+        it = %{
+          it
+          | count_at_index: count_at_index,
+            value_from_index: value_from_index,
+            count_to_index: it.count_to_index + count_at_index,
+            highest_equivalent_value: Histogrex.highest_equivalent_value(h, value_from_index)
         }
+
         reduce(it, f.(it, acc), f)
     end
   end
